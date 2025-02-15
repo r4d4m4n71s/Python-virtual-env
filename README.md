@@ -7,14 +7,14 @@
 
 ## 🌟 Elevate Your Python Development Workflow
 
-`virtual-env-manager` is a powerful, intuitive utility for managing Python virtual environments with unparalleled ease and flexibility.
+`virtual-env-manager` is a powerful, intuitive utility for managing virtual environments on py build.
 
 ---
 
 ### ✨ Key Features
 
 - 🚀 **Effortless Environment Management**
-  - Create, load, and remove virtual environments with a single command
+  - Create and run commands in virtual environments on the fly
   - Cross-platform support (Windows and Unix-like systems)
 
 - 🔍 **Smart Consistency Checking**
@@ -30,16 +30,7 @@
   - Retrieve and inspect command results
 
 ---
-
-## 🚀 Quick Start
-
-### Installation
-
-```bash
-pip install .
-```
-
-### Basic Usage
+### Usage
 
 ```python
 from virtual_env.env_manager import EnvManager
@@ -51,8 +42,6 @@ EnvManager(".venv").run("pip", "install", "requests", "pandas").result()
 EnvManager(".venv").flush().run("python script.py").result()
 
 ```
-
-## 🛠 Advanced Examples
 
 ### Context Manager Usage
 

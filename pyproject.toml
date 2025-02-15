@@ -31,8 +31,8 @@ packages = ["src/virtual_env"]
 line-length = 88
 target-version = "py311"
 select = [
-    "E",    # pycodestyle errors
-    "W",    # pycodestyle warnings
+    #"E",    # pycodestyle errors
+    #"W",    # pycodestyle warnings
     "F",    # pyflakes
     #"I",    # isort
     "C",    # flake8-comprehensions

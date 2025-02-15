@@ -30,8 +30,7 @@ class EnvManager:
 
         # Create and use a EnvManager instance
         with EnvManager(".venv", logger=logger) as venv_manager:
-            venv_manager.load()
-            venv_manager.run("pip", "install", "requests")
+            venv_manager.run("pip", "install", "requests").result()
             #... other operations...
     """
     def __init__(self, venv_path, logger=None):
@@ -73,22 +72,24 @@ class EnvManager:
         self._log(f"Virtual environment created: {self.venv_path}")
         self._auto_load_libraries('importlib.metadata', 'pkg_resources')  # Load libraries after creation
         return True
-        
+
     def flush(self, clear=True):
         """
-        Recreates the virtual environment again. 
-        
+        Recreates the virtual environment again.
         Args:
-            clear (bool, optional): Whether to clear an existing environment before creation. by default true
-            True: The contents of the environment directory are deleted before the virtual environment is created. This ensures that you start with a clean slate.
-            False: False (which is the default), the contents of the environment directory are not deleted, and the virtual environment is created on top of the existing files.
+            clear (bool, optional): Whether to clear an existing environment before
+            creation. by default true
+            True: The contents of the environment directory are deleted before the
+            virtual environment is created. This ensures that you start with a clean state
+            False: False (which is the default), the contents of the environment
+            directory are not deleted, and the virtual environment is created on top of the existing files.
             but in case of non sucess will attemp to recreate the environment cleaning the content
 
         Returns:
             self object
         """
         try:
-            self._create(clear=clear)           
+            self._create(clear=clear)
         except Exception as e:
             self._log(f"Error creating environment: {e}", level="error")
             self._create(clear=True)
@@ -119,7 +120,7 @@ class EnvManager:
         if not os.path.exists(activate_script):
             self._log(f"Activation script not found: {activate_script}", level="error")
             raise RuntimeError(f"Activation script not found: {activate_script}, try flushing environment")
-        
+
         return f'"{activate_script}"' if sys.platform == "win32" else f'source "{activate_script}"'
 
     def run(self, command, *args, capture_output=True, env=None):
@@ -143,7 +144,7 @@ class EnvManager:
         if not self.exists():
             raise RuntimeError(f"Virtual environment not found. Creating at: {self.venv_path}")
 
-        activation_command = self._activate_command()        
+        activation_command = self._activate_command()
 
         # Construct the full command, including activation
         full_command = f"{activation_command} && {command} {' '.join(map(str, args))}"
