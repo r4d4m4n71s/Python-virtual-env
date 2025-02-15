@@ -3,25 +3,41 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "virtual-env"
+name = "virtual-env-manager"
 version = "0.1.0"
-description = "A virtual env activator, self contained."
+description = "A comprehensive Python virtual environment management utility with advanced lifecycle management"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.8"
 authors = [
     { name = "r4d4m4n71s", email = "your.email@example.com" }
 ]
-dependencies = []
+dependencies = [
+    # Core Python standard library dependencies (already available)
+    # No external package dependencies required for core functionality
+]
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.1.0",
-    "pytest"
+    "ruff>=0.1.0",           # Linting
+    "pytest",                # Testing
+    "black>=23.0",           # Code formatting
+    "mypy>=1.0",             # Static type checking
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/virtual_env"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    #"I",    # isort
+    "C",    # flake8-comprehensions
+    "B",    # flake8-bugbear
+]
 
 [tool.black]
 line-length = 88
@@ -35,3 +51,4 @@ disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-v"  # Verbose test output
