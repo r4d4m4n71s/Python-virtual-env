@@ -10,14 +10,13 @@ try:
 except ImportError:
     from importlib import metadata as importlib_metadata
     pkg_resources = None
-from src.virtual_env.env_manager import VirtualEnvironmentManager, CommandExecutionError, VirtualEnvironmentError
+from src.virtual_env.env_manager import EnvManager, CmdExecError, EnvError
 from unittest.mock import patch, mock_open, MagicMock, call  # For mocking files and subprocess
 
-
-class TestVirtualEnvironmentManager_Regression(unittest.TestCase):
+class TestEnvManager_Regression(unittest.TestCase):
 
     def test_smoke(self):
-        manager: VirtualEnvironmentManager = VirtualEnvironmentManager(".test_venv")
+        manager: EnvManager = EnvManager(".test_venv")
         self.assertTrue(manager.check_consistency())
         manager.run("pip", "install", "requests")
         manager.run("pip", "show", "requests")   
@@ -25,12 +24,12 @@ class TestVirtualEnvironmentManager_Regression(unittest.TestCase):
         self.assertFalse(manager.exists())
         self.assertFalse(manager.check_consistency())            
 
-class TestVirtualEnvironmentManager(unittest.TestCase):
+class TestEnvManager(unittest.TestCase):
 
     def setUp(self):
         self.venv_path = ".test_venv"  # Use a test-specific path
         self.logger = logging.getLogger(__name__)  # Initialize logger
-        self.venv_manager = VirtualEnvironmentManager(self.venv_path)
+        self.venv_manager = EnvManager(self.venv_path)
         self.venv_manager.set_logger(self.logger)
         self.config_json_path = "test_config.json"
         self.config_dict = {
@@ -52,15 +51,15 @@ class TestVirtualEnvironmentManager(unittest.TestCase):
             os.remove(self.config_json_path)  # Clean up config file
 
     def test_create_and_exists(self):
-        self.assertTrue(self.venv_manager.create())
+        self.assertTrue(self.venv_manager._create())
         self.assertTrue(self.venv_manager.exists())
 
     def test_create_already_exists(self):
-        self.assertTrue(self.venv_manager.create())
-        self.assertTrue(self.venv_manager.create())  # Should return True if already exists
+        self.assertTrue(self.venv_manager._create())
+        self.assertTrue(self.venv_manager._create())  # Should return True if already exists
 
     def test_remove(self):
-        self.assertTrue(self.venv_manager.create())
+        self.assertTrue(self.venv_manager._create())
         self.assertTrue(self.venv_manager.remove())
         self.assertFalse(self.venv_manager.exists())
 
@@ -81,7 +80,7 @@ class TestVirtualEnvironmentManager(unittest.TestCase):
 
     def test_run_command_error(self):
         self.venv_manager.load()
-        with self.assertRaises(CommandExecutionError):
+        with self.assertRaises(CmdExecError):
             self.venv_manager.run("nonexistent_command")  # Should raise CommandExecutionError
 
     def test_load_create(self):
@@ -89,7 +88,7 @@ class TestVirtualEnvironmentManager(unittest.TestCase):
         self.assertTrue(self.venv_manager._loaded)
 
     def test_load_clear(self):
-        self.venv_manager.create()
+        self.venv_manager._create()
         self.assertTrue(self.venv_manager.exists())
         self.venv_manager.load(clear_if_exists=True)
         self.assertTrue(self.venv_manager.exists()) # Still exists, but should be a clean venv
@@ -117,57 +116,26 @@ class TestVirtualEnvironmentManager(unittest.TestCase):
         self.venv_manager.run("pip", "install", "requests==2.28.1") # Install a different version
         self.assertFalse(self.venv_manager.check_consistency(config_json=self.config_json_path))
 
-    # @patch('os.path.exists')
-    # @patch('importlib.metadata.distributions')
-    # @patch('subprocess.run')
-    # def test_check_consistency_success(self, mock_run, mock_distributions, mock_exists):
-    #     # Mock file existence checks
-    #     mock_exists.side_effect = lambda x: True
+    def test_flush_environment(self):
+        # Test the new flush method
+        original_path = self.venv_manager.venv_path
+        self.venv_manager.flush()
+        self.assertTrue(self.venv_manager.exists())
+        self.assertEqual(self.venv_manager.venv_path, original_path)
 
-    #     # Mock package distribution
-    #     mock_dist = MagicMock()
-    #     mock_dist.name = "requests"
-    #     mock_dist.version = "2.31.0"
-    #     mock_distributions.return_value = [mock_dist]
+    def test_flush_environment_with_error(self):
+        # Test flush method with a simulated error
+        with patch('src.virtual_env.env_manager.EnvManager._create', side_effect=Exception("Simulated error")):
+            with self.assertRaises(EnvError):
+                self.venv_manager.flush()
 
-    #     # Mock pip check success
-    #     mock_run.return_value = subprocess.CompletedProcess(
-    #         ["pip", "check"], 
-    #         0, 
-    #         stdout=b"No broken requirements found.", 
-    #         stderr=b""
-    #     )
-
-    #     with open(self.config_json_path, 'w') as f:  # Create config file
-    #         json.dump(self.config_dict, f)
-
-    #     self.venv_manager.load()
-    #     self.venv_manager._loaded = True  # Ensure loaded state
-        
-    #     # Test consistency check
-    #     self.assertTrue(self.venv_manager.check_consistency(config_json=self.config_json_path))
-
-    #     # Get the actual paths that would be checked
-    #     expected_paths = []
-    #     if sys.platform == "win32":
-    #         expected_paths = [
-    #             #os.path.join(self.venv_manager.venv_path, "python.exe"),
-    #             #os.path.join(self.venv_manager.venv_path, "Scripts/python.exe"),
-    #             os.path.join(self.venv_manager.venv_path, "Scripts/activate.bat"),
-    #             os.path.join(self.venv_manager.venv_path, "Scripts/activate")
-    #         ]
-    #     else:
-    #         expected_paths = [
-    #             os.path.join(self.venv_manager.venv_path, "bin/python"),
-    #             os.path.join(self.venv_manager.venv_path, "bin/activate")
-    #         ]
-
-    #     # Convert paths to use forward slashes consistently
-    #     #expected_paths = [path.replace("/","\\") for path in expected_paths]
-
-    #     # Verify all expected paths were checked
-    #     expected_calls = [call(path) for path in expected_paths]
-    #     mock_exists.assert_has_calls(expected_calls, any_order=True)
+    def test_result_method(self):
+        # Test the new result method
+        self.venv_manager.load()
+        self.venv_manager.run("python", "--version")
+        result = self.venv_manager.result()
+        self.assertIsNotNone(result)
+        self.assertEqual(result.returncode, 0)
 
     @patch('subprocess.run')
     def test__pip_check_success(self, mock_run):

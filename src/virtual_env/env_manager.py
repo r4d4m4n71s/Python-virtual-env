@@ -5,15 +5,15 @@ import sys
 import json
 import shutil
 
-class VirtualEnvironmentError(Exception):
+class EnvError(Exception):
     """Base class for virtual environment errors."""
     pass
 
-class CommandExecutionError(VirtualEnvironmentError):
+class CmdExecError(EnvError):
     """Raised when a command execution fails."""
     pass
 
-class VirtualEnvironmentManager:
+class EnvManager:
     """
     Manages a virtual environment, providing functionalities for creation,
     activation, command execution, and consistency checks.
@@ -28,58 +28,73 @@ class VirtualEnvironmentManager:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
         logger = logging.getLogger(__name__)
 
-        # Create and use a VirtualEnvironmentManager instance
-        with VirtualEnvironmentManager(".venv", logger=logger) as venv_manager:
+        # Create and use a EnvManager instance
+        with EnvManager(".venv", logger=logger) as venv_manager:
             venv_manager.load()
             venv_manager.run("pip", "install", "requests")
             #... other operations...
     """
     def __init__(self, venv_path, logger=None):
         """
-        Initializes a VirtualEnvironmentManager instance.
+        Initializes a EnvManager instance.
 
         Args:
             venv_path (str): The path to the virtual environment directory.
             logger (logging.Logger, optional): The logger instance to use. Defaults to None.
         """
         self.venv_path = os.path.abspath(venv_path)
-        self._loaded = False
         self._logger = logger
         self.command_result = None
-        self.load()
+        self._create(clear=True)
 
     def __enter__(self):
         """Loads the virtual environment when entering a 'with' statement."""
-        self.load()
+        self._create(clear=True)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Performs any necessary cleanup when exiting a 'with' statement."""
         pass  # No specific cleanup needed in this example
 
-    def create(self, clear=False):
+    def _create(self, clear=False):
         """
         Creates the virtual environment.
 
         Args:
-            clear (bool, optional): Whether to clear an existing environment before creation. Defaults to False.
+            clear (bool, optional): Whether to clear an existing environment before creation. 
+            True: The contents of the environment directory are deleted before the virtual environment is created. This ensures that you start with a clean slate.
+            False: False (which is the default), the contents of the environment directory are not deleted, and the virtual environment is created on top of the existing files.
 
         Returns:
             bool: True if the environment was created successfully, False otherwise.
         """
-        if self.exists() and not clear:
-            self._log(f"Virtual environment already exists at: {self.venv_path}")
-            return True
+        builder = venv.EnvBuilder(clear=clear)
+        builder.create(self.venv_path)
+        self._log(f"Virtual environment created: {self.venv_path}")
+        self._auto_load_libraries('importlib.metadata', 'pkg_resources')  # Load libraries after creation
+        return True
+        
+    def flush(self, clear=True):
+        """
+        Recreates the virtual environment again. 
+        
+        Args:
+            clear (bool, optional): Whether to clear an existing environment before creation. by default true
+            True: The contents of the environment directory are deleted before the virtual environment is created. This ensures that you start with a clean slate.
+            False: False (which is the default), the contents of the environment directory are not deleted, and the virtual environment is created on top of the existing files.
+            but in case of non sucess will attemp to recreate the environment cleaning the content
 
+        Returns:
+            self object
+        """
         try:
-            builder = venv.EnvBuilder(clear=clear)
-            builder.create(self.venv_path)
-            self._log(f"Virtual environment created: {self.venv_path}")
-            self._auto_load_libraries('importlib.metadata', 'pkg_resources')  # Load libraries after creation
-            return True
+            self._create(clear=clear)           
         except Exception as e:
             self._log(f"Error creating environment: {e}", level="error")
-            return False
+            self._create(clear=True)
+            raise EnvError(f"Unable to recreate environmet: {e}") from e
+
+        return self
 
     def exists(self):
         """
@@ -94,23 +109,16 @@ class VirtualEnvironmentManager:
         """
         Removes the virtual environment.
 
-        Returns:
-            bool: True if the environment was removed successfully, False otherwise.
         """
-        try:
-            shutil.rmtree(self.venv_path)
-            self._log(f"Virtual environment removed: {self.venv_path}")
-            return True
-        except OSError as e:
-            self._log(f"Error removing virtual environment: {e}", level="error")
-            return False
+        shutil.rmtree(self.venv_path)
+        self._log(f"Virtual environment removed: {self.venv_path}")
 
     def _activate_command(self):
         """Returns the command to activate the virtual environment."""
         activate_script = os.path.join(self.venv_path, "Scripts" if sys.platform == "win32" else "bin", "activate")
         if not os.path.exists(activate_script):
             self._log(f"Activation script not found: {activate_script}", level="error")
-            raise RuntimeError(f"Activation script not found: {activate_script}")
+            raise RuntimeError(f"Activation script not found: {activate_script}, try flushing environment")
         
         return f'"{activate_script}"' if sys.platform == "win32" else f'source "{activate_script}"'
 
@@ -135,12 +143,7 @@ class VirtualEnvironmentManager:
         if not self.exists():
             raise RuntimeError(f"Virtual environment not found. Creating at: {self.venv_path}")
 
-        if not self._loaded:
-            raise RuntimeError("Virtual environment must be loaded using load() before running commands.")
-
-        activation_command = self._activate_command()
-        if activation_command is None:
-            return None
+        activation_command = self._activate_command()        
 
         # Construct the full command, including activation
         full_command = f"{activation_command} && {command} {' '.join(map(str, args))}"
@@ -157,42 +160,20 @@ class VirtualEnvironmentManager:
         except subprocess.CalledProcessError as e:
             self._log(f"Command '{command} {' '.join(map(str, args))}' failed: {e}", level="error")
             self._log(e.stderr, level="error")
-            raise CommandExecutionError(f"Command '{command} {' '.join(map(str, args))}' failed: {e}") from e
+            raise CmdExecError(f"Command '{command} {' '.join(map(str, args))}' failed: {e}") from e
         except FileNotFoundError as e:
             self._log(f"File not found: {e}", level="error")
-            raise VirtualEnvironmentError(f"File not found: {e}") from e
+            raise EnvError(f"File not found: {e}") from e
         except Exception as e:
             self._log(f"An unexpected error occurred: {e}", level="exception")
             raise
 
     def result(self):
+        """
+            Command execution result
+        """
         return self.command_result        
-
-    def load(self, create_if_not_exists=True, clear_if_exists=False):
-        """
-        Loads the virtual environment.
-
-        Args:
-            create_if_not_exists (bool, optional): Whether to create the environment if it doesn't exist. Defaults to True.
-            clear_if_exists (bool, optional): Whether to clear the environment if it exists. Defaults to False.
-
-        Returns:
-            self: Returns the instance itself for method chaining.
-        """
-        if not self.exists() and create_if_not_exists:
-            self._log(f"Virtual environment not found. Creating at: {self.venv_path}")
-            if not self.create():
-                return self
-        elif self.exists() and clear_if_exists:
-            self._log(f"Virtual environment exists. Clearing at: {self.venv_path}")
-            if not self.remove():
-                return self
-            if not self.create():
-                return self
-
-        self._loaded = True
-        return self
-
+    
     def check_consistency(self, config_json=None, run_pip_check=True):
         """
         Checks the consistency of the virtual environment against a configuration.
@@ -320,7 +301,7 @@ class VirtualEnvironmentManager:
                     self._log(result.stderr, level="error")
                 return False
 
-        except CommandExecutionError as e:
+        except CmdExecError as e:
             self._log(f"pip check failed: {e}", level="error")
             return False
 
@@ -337,17 +318,7 @@ class VirtualEnvironmentManager:
             log_method = getattr(self._logger, level, self._logger.info) # Get the appropriate log method or default to info
             log_method(message)
         else:
-            print(message)
-
-    def set_logger(self, logger):
-        """
-        Sets the logger to be used for logging messages.
-
-        Args:
-            logger (logging.Logger): The logger instance.
-        """
-        self._logger = logger
-        return self
+            print(message)    
 
     def _auto_load_libraries(self, *libraries):
         """
