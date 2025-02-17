@@ -4,13 +4,7 @@ import json
 import shutil
 import unittest
 from unittest import mock
-import logging
-try:
-    import pkg_resources
-except ImportError:
-    pkg_resources = None
-
-from src.virtual_env.env_manager import EnvManager, CmdExecError, EnvError
+from virtual_env.env_manager import EnvManager, CmdExecError, EnvError
 
 class TestEnvManager_Regression(unittest.TestCase):
 
@@ -26,7 +20,6 @@ class TestEnvManager(unittest.TestCase):
 
     def setUp(self):
         self.venv_path = ".test_venv"  # Use a test-specific path
-        self.logger = logging.getLogger(__name__)  # Initialize logger
         self.venv_manager = EnvManager(self.venv_path, logger=self.logger)
         self.config_json_path = "test_config.json"
         self.config_dict = {
@@ -93,22 +86,22 @@ class TestEnvManager(unittest.TestCase):
             json.dump(self.config_dict, f)
 
         # Modify the test to handle potential import issues
-        if pkg_resources:
-            result = self.venv_manager.check_consistency(config_json=self.config_json_path)
-            self.assertFalse(result)
-        else:
-            self.skipTest("pkg_resources not available")
+        #if pkg_resources:
+        result = self.venv_manager.check_consistency(config_json=self.config_json_path)
+        self.assertFalse(result)
+        #else:
+        #    self.skipTest("pkg_resources not available")
 
     def test_check_consistency_packages_missing(self):
         with open(self.config_json_path, 'w') as f:
             json.dump(self.config_dict, f)
 
         # Modify the test to handle potential import issues
-        if pkg_resources:
-            result = self.venv_manager.check_consistency(config_json=self.config_json_path)
-            self.assertFalse(result)
-        else:
-            self.skipTest("pkg_resources not available")
+        #if pkg_resources:
+        result = self.venv_manager.check_consistency(config_json=self.config_json_path)
+        self.assertFalse(result)
+        #else:
+        #    self.skipTest("pkg_resources not available")
 
     def test_check_consistency_packages_version_incorrect(self):
         with open(self.config_json_path, 'w') as f:
@@ -118,11 +111,11 @@ class TestEnvManager(unittest.TestCase):
         self.venv_manager.run("pip", "install", "requests==2.28.1")
 
         # Modify the test to handle potential import issues
-        if pkg_resources:
-            result = self.venv_manager.check_consistency(config_json=self.config_json_path)
-            self.assertFalse(result)
-        else:
-            self.skipTest("pkg_resources not available")
+        #if pkg_resources:
+        result = self.venv_manager.check_consistency(config_json=self.config_json_path)
+        self.assertFalse(result)
+        #else:
+        #    self.skipTest("pkg_resources not available")
 
     def test_flush_environment(self):
         original_path = self.venv_manager.venv_path
@@ -160,3 +153,24 @@ class TestEnvManager(unittest.TestCase):
     def test__auto_load_libraries_fail(self):
         nonexistent = self.venv_manager._auto_load_libraries('nonexistent_module')
         self.assertIsNone(nonexistent[0])  # Should return None for the module
+
+    def test_environment_activation(self):
+        # Install a test package
+        self.venv_manager.run("pip", "install", "requests")
+        
+        # Get Python path from virtual environment
+        result = self.venv_manager.run("python", "-c", "import sys; print(sys.executable)").result()
+        venv_python_path = result.stdout.strip()
+        
+        # Verify Python path points to virtual environment
+        expected_python = os.path.join(
+            self.venv_path,
+            "Scripts" if sys.platform == "win32" else "bin",
+            "python.exe" if sys.platform == "win32" else "python"
+        )
+        self.assertTrue(os.path.samefile(venv_python_path, os.path.abspath(expected_python)))
+        
+        # Verify installed package is accessible
+        result = self.venv_manager.run("python", "-c", "import requests; print(requests.__file__)").result()
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(self.venv_path, result.stdout)
