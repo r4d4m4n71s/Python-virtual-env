@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "virtual_env"
 version = "0.1.0"
-description = "A comprehensive Python virtual environment management utility with advanced lifecycle management"
+description = "virtual environment lifecycle manager"
 readme = "README.md"
 requires-python = ">=3.8"
 authors = [

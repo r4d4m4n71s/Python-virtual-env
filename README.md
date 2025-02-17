@@ -7,7 +7,7 @@
 
 ## 🌟 Elevate Your Python Development Workflow
 
-`virtual-env-manager` is a powerful, intuitive utility for managing virtual environments on py build.
+`virtual_env` virtual environment lifecycle manager.
 
 ---
 
@@ -33,13 +33,13 @@
 ### Usage
 
 ```python
-from virtual_env.env_manager import EnvManager
+from virtual_env import EnvManager
 
-# Installing libraries outside environment
-EnvManager(".venv").run("pip", "install", "requests", "pandas").result()
+# Installing libraries
+EnvManager(".some_env").run("pip", "install", "requests", "pandas").result()
 
-# Clean environment from existing libraries, Running on demand 
-EnvManager(".venv").flush().run("python script.py").result()
+# Reset the state, flushing libraries
+EnvManager(".some_env").flush().run("python script.py").result()
 
 ```
 
