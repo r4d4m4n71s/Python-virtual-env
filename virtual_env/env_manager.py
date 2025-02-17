@@ -40,6 +40,7 @@ class EnvManager:
         Args:
             venv_path (str): The path to the virtual environment directory.
             logger (logging.Logger, optional): The logger instance to use. Defaults to None.
+            auto_create (bool, optional): Whether to automatically create the environment. Defaults to True.
         """
         self.venv_path = os.path.abspath(venv_path)
         self._logger = logger
@@ -47,7 +48,6 @@ class EnvManager:
 
     def __enter__(self):
         """Loads the virtual environment when entering a 'with' statement."""
-        self._create(clear=True)
         return self
 
     def __exit__(self):
@@ -66,7 +66,7 @@ class EnvManager:
         Returns:
             bool: True if the environment was created successfully, False otherwise.
         """
-        builder = venv.EnvBuilder(clear=clear)
+        builder = venv.EnvBuilder(clear=clear, with_pip = True)
         builder.create(self.venv_path)
         self._log(f"Virtual environment created: {self.venv_path}")
         self._auto_load_libraries('importlib.metadata', 'pkg_resources')  # Load libraries after creation
@@ -107,15 +107,23 @@ class EnvManager:
 
     def remove(self):
         """
-        Removes the virtual environment.
-
+        Removes the virtual environment if it exists.
         """
-        shutil.rmtree(self.venv_path)
-        self._log(f"Virtual environment removed: {self.venv_path}")
+        if self.exists():
+            shutil.rmtree(self.venv_path)
+            self._log(f"Virtual environment removed: {self.venv_path}")
 
     def _activate_command(self):
         """Returns the command to activate the virtual environment."""
-        activate_script = os.path.join(self.venv_path, "Scripts" if sys.platform == "win32" else "bin", "activate")
+        platform_locator = os.path.join(self.venv_path, "Scripts" if sys.platform == "win32" else "bin")
+        
+        activate_script = os.path.join(platform_locator, "activate")
+        
+        # update shell process variables
+        process_env = os.environ.copy()
+        process_env["VIRTUAL_ENV"] = self.venv_path
+        process_env["PATH"] = os.path.join(platform_locator) + os.pathsep + process_env.get("PATH", "")       
+
         if not os.path.exists(activate_script):
             self._log(f"Activation script not found: {activate_script}", level="error")
             raise RuntimeError(f"Activation script not found: {activate_script}, try flushing environment")
@@ -142,29 +150,19 @@ class EnvManager:
         self.command_result = None
         if not self.exists():
             self._create()
+            if not self.exists():
+                raise RuntimeError(f"Failed to create virtual environment at {self.venv_path}")
 
+        # Set up environment variables for the virtual environment
+        process_env = os.environ.copy()
+        if env:
+            process_env.update(env)
+
+        # Get activation command and construct full command
         activation_command = self._activate_command()
-
-        # Construct the full command, including activation
-        #full_command = f"{activation_command} && {command} {' '.join(map(str, args))}"
-        full_command = f"{command} {' '.join(map(str, args))}"
+        full_command = f"{activation_command} && {command} {' '.join(map(str, args))}"
 
         try:
-            # Include the extra environment variables if provided
-            process_env = os.environ.copy()
-            if env:
-                process_env.update(env)
-
-            # check if environment is active
-            if "VIRTUAL_ENV" not in os.environ:
-                raise EnvError(f"Not any environment is active")
-                        
-            # activate the environment
-            if self.venv_path != os.environ["VIRTUAL_ENV"]:
-                self.command_result = subprocess.run(activation_command, shell=True, capture_output=capture_output, text=True, check=True, env=process_env)
-
-            if self.venv_path != os.environ["VIRTUAL_ENV"]:
-                raise EnvError(f"Unable to activate the target environment: {self.venv_path}, current: {os.environ["VIRTUAL_ENV"]}")
 
             self.command_result = subprocess.run(full_command, shell=True, capture_output=capture_output, text=True, check=True, env=process_env)
             self._log(f"Command '{command} {' '.join(map(str, args))}' executed successfully.")
