@@ -4,7 +4,7 @@ import json
 import shutil
 import unittest
 from unittest import mock
-from virtual_env.env_manager import EnvManager, CmdExecError, EnvError
+from venv_py.env_manager import EnvManager, CmdExecError, EnvError
 
 class TestEnvManager_Regression(unittest.TestCase):
 

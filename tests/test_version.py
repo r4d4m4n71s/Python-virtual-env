@@ -1,6 +1,6 @@
 """Test version information."""
 
-from virtual_env import __version__
+from venv_py import __version__
 
 
 def test_version():

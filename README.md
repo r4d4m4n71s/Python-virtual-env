@@ -7,7 +7,7 @@
 
 ## 🌟 Elevate Your Python Development Workflow
 
-`virtual_env` virtual environment lifecycle manager.
+`venv_py` virtual environment lifecycle manager.
 
 ---
 
@@ -33,7 +33,7 @@
 ### Usage
 
 ```python
-from virtual_env import EnvManager
+from venv_py import EnvManager
 
 # Installing libraries
 EnvManager(".some_env").run("pip", "install", "requests", "pandas").result()
