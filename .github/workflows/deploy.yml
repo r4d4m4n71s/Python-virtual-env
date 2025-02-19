@@ -1,0 +1,46 @@
+name: Deploy Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      distribution_type:
+        description: 'Distribution type to deploy (release/beta)'
+        required: true
+        type: choice
+        options:
+          - release
+          - beta
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+          
+      - name: List available distributions
+        id: list_dist
+        run: |
+          echo "Available distributions in distribution/${{ github.event.inputs.distribution_type }}:"
+          ls -l distribution/${{ github.event.inputs.distribution_type }}
+          
+      - name: Set PyPI repository URL
+        id: pypi_url
+        run: |
+          if [ "${{ github.event.inputs.distribution_type }}" = "release" ]; then
+            echo "url=https://upload.pypi.org/legacy/" >> $GITHUB_OUTPUT
+          else
+            echo "url=https://test.pypi.org/legacy/" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Deploy to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          pip install twine
+          twine upload --repository-url ${{ steps.pypi_url.outputs.url }} distribution/${{ github.event.inputs.distribution_type }}/*
