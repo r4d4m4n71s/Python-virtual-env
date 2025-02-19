@@ -1,4 +1,4 @@
-name: Deploy Package
+name: 3) Deploy Package
 
 on:
   workflow_dispatch:
@@ -16,18 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
-          
+
       - name: List available distributions
         id: list_dist
         run: |
           echo "Available distributions in distribution/${{ github.event.inputs.distribution_type }}:"
           ls -l distribution/${{ github.event.inputs.distribution_type }}
-          
+
       - name: Set PyPI repository URL
         id: pypi_url
         run: |
@@ -36,7 +36,7 @@ jobs:
           else
             echo "url=https://test.pypi.org/legacy/" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Deploy to PyPI
         env:
           TWINE_USERNAME: __token__

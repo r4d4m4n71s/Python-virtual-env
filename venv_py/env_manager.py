@@ -5,13 +5,18 @@ import sys
 import json
 import shutil
 
+
 class EnvError(Exception):
     """Base class for virtual environment errors."""
+
     pass
+
 
 class CmdExecError(EnvError):
     """Raised when a command execution fails."""
+
     pass
+
 
 class EnvManager:
     """
@@ -33,6 +38,7 @@ class EnvManager:
             venv_manager.run("pip", "install", "requests").result()
             #... other operations...
     """
+
     def __init__(self, venv_path, logger=None):
         """
         Initializes a EnvManager instance.
@@ -59,17 +65,19 @@ class EnvManager:
         Creates the virtual environment.
 
         Args:
-            clear (bool, optional): Whether to clear an existing environment before creation. 
+            clear (bool, optional): Whether to clear an existing environment before creation.
             True: The contents of the environment directory are deleted before the virtual environment is created. This ensures that you start with a clean slate.
             False: False (which is the default), the contents of the environment directory are not deleted, and the virtual environment is created on top of the existing files.
 
         Returns:
             bool: True if the environment was created successfully, False otherwise.
         """
-        builder = venv.EnvBuilder(clear=clear, with_pip = True)
+        builder = venv.EnvBuilder(clear=clear, with_pip=True)
         builder.create(self.venv_path)
         self._log(f"Virtual environment created: {self.venv_path}")
-        self._auto_load_libraries('importlib.metadata', 'pkg_resources')  # Load libraries after creation
+        self._auto_load_libraries(
+            "importlib.metadata", "pkg_resources"
+        )  # Load libraries after creation
         return True
 
     def flush(self, clear=True):
@@ -115,20 +123,30 @@ class EnvManager:
 
     def _activate_command(self):
         """Returns the command to activate the virtual environment."""
-        platform_locator = os.path.join(self.venv_path, "Scripts" if sys.platform == "win32" else "bin")
-        
+        platform_locator = os.path.join(
+            self.venv_path, "Scripts" if sys.platform == "win32" else "bin"
+        )
+
         activate_script = os.path.join(platform_locator, "activate")
-        
+
         # update shell process variables
         process_env = os.environ.copy()
         process_env["VIRTUAL_ENV"] = self.venv_path
-        process_env["PATH"] = os.path.join(platform_locator) + os.pathsep + process_env.get("PATH", "")       
+        process_env["PATH"] = (
+            os.path.join(platform_locator) + os.pathsep + process_env.get("PATH", "")
+        )
 
         if not os.path.exists(activate_script):
             self._log(f"Activation script not found: {activate_script}", level="error")
-            raise RuntimeError(f"Activation script not found: {activate_script}, try flushing environment")
+            raise RuntimeError(
+                f"Activation script not found: {activate_script}, try flushing environment"
+            )
 
-        return f'"{activate_script}"' if sys.platform == "win32" else f'source "{activate_script}"'
+        return (
+            f'"{activate_script}"'
+            if sys.platform == "win32"
+            else f'source "{activate_script}"'
+        )
 
     def run(self, command, *args, capture_output=True, env=None):
         """
@@ -151,7 +169,9 @@ class EnvManager:
         if not self.exists():
             self._create()
             if not self.exists():
-                raise RuntimeError(f"Failed to create virtual environment at {self.venv_path}")
+                raise RuntimeError(
+                    f"Failed to create virtual environment at {self.venv_path}"
+                )
 
         # Set up environment variables for the virtual environment
         process_env = os.environ.copy()
@@ -163,14 +183,27 @@ class EnvManager:
         full_command = f"{activation_command} && {command} {' '.join(map(str, args))}"
 
         try:
-
-            self.command_result = subprocess.run(full_command, shell=True, capture_output=capture_output, text=True, check=True, env=process_env)
-            self._log(f"Command '{command} {' '.join(map(str, args))}' executed successfully.")
+            self.command_result = subprocess.run(
+                full_command,
+                shell=True,
+                capture_output=capture_output,
+                text=True,
+                check=True,
+                env=process_env,
+            )
+            self._log(
+                f"Command '{command} {' '.join(map(str, args))}' executed successfully."
+            )
             return self
         except subprocess.CalledProcessError as e:
-            self._log(f"Command '{command} {' '.join(map(str, args))}' failed: {e}", level="error")
+            self._log(
+                f"Command '{command} {' '.join(map(str, args))}' failed: {e}",
+                level="error",
+            )
             self._log(e.stderr, level="error")
-            raise CmdExecError(f"Command '{command} {' '.join(map(str, args))}' failed: {e}") from e
+            raise CmdExecError(
+                f"Command '{command} {' '.join(map(str, args))}' failed: {e}"
+            ) from e
         except FileNotFoundError as e:
             self._log(f"File not found: {e}", level="error")
             raise EnvError(f"File not found: {e}") from e
@@ -180,11 +213,11 @@ class EnvManager:
 
     def result(self):
         """
-            Command execution result
+        Command execution result
         """
-        return self.command_result        
-    
-    def check_consistency(self, config_json=None, run_pip_check=True):
+        return self.command_result
+
+    def check_consistency(self, config_json=None, run_pip_check=True):  # noqa: C901
         """
         Checks the consistency of the virtual environment against a configuration.
 
@@ -225,7 +258,10 @@ class EnvManager:
             elif isinstance(config_json, dict):
                 config.update(config_json)
             else:
-                self._log("Invalid config_json. It must be a file path (str) or a dictionary.", level="error")
+                self._log(
+                    "Invalid config_json. It must be a file path (str) or a dictionary.",
+                    level="error",
+                )
                 return False
 
         try:
@@ -243,14 +279,21 @@ class EnvManager:
                             return False
 
             # Get the imported modules (or None if they failed to import)
-            importlib_metadata, pkg_resources = self._auto_load_libraries('importlib.metadata', 'pkg_resources')
+            importlib_metadata, pkg_resources = self._auto_load_libraries(
+                "importlib.metadata", "pkg_resources"
+            )
 
             # Only check packages if importlib.metadata and pkg_resources are available
             if "packages" in config and importlib_metadata:
                 try:
-                    installed_packages = {dist.name: dist.version for dist in importlib_metadata.distributions()}
+                    installed_packages = {
+                        dist.name: dist.version
+                        for dist in importlib_metadata.distributions()
+                    }
                 except Exception as e:
-                    self._log(f"Could not retrieve installed packages: {e}", level="error")
+                    self._log(
+                        f"Could not retrieve installed packages: {e}", level="error"
+                    )
                     return False
 
                 for package_name, required_version in config["packages"].items():
@@ -262,19 +305,27 @@ class EnvManager:
 
                     if required_version:
                         try:
-                            req = pkg_resources.Requirement.parse(f"{package_name}{required_version}")
+                            req = pkg_resources.Requirement.parse(
+                                f"{package_name}{required_version}"
+                            )
                             if not req.specifier.contains(installed_version):
                                 self._log(
                                     f"Incorrect version for {package_name}: "
                                     f"Expected {required_version}, got {installed_version}",
-                                    level="error"
+                                    level="error",
                                 )
                                 return False
                         except pkg_resources.RequirementParseError as e:
-                            self._log(f"Error parsing version string for {package_name}: {e}", level="error")
+                            self._log(
+                                f"Error parsing version string for {package_name}: {e}",
+                                level="error",
+                            )
                             return False
                         except Exception as e:
-                            self._log(f"An unexpected error occurred while checking package versions: {e}", level="error")
+                            self._log(
+                                f"An unexpected error occurred while checking package versions: {e}",
+                                level="error",
+                            )
                             return False
 
             if run_pip_check and not self._pip_check():
@@ -289,7 +340,6 @@ class EnvManager:
         except Exception as e:
             self._log(f"An unexpected error occurred: {e}", level="exception")
             return False
-
 
     def _pip_check(self):
         """
@@ -315,7 +365,6 @@ class EnvManager:
             self._log(f"pip check failed: {e}", level="error")
             return False
 
-
     def _log(self, message, level="info"):
         """
         Logs a message using the provided logger or falls back to printing.
@@ -325,10 +374,12 @@ class EnvManager:
             level (str, optional): The logging level ('info', 'error', 'exception', 'warning'). Defaults to "info".
         """
         if self._logger:
-            log_method = getattr(self._logger, level, self._logger.info) # Get the appropriate log method or default to info
+            log_method = getattr(
+                self._logger, level, self._logger.info
+            )  # Get the appropriate log method or default to info
             log_method(message)
         else:
-            print(message)    
+            print(message)
 
     def _auto_load_libraries(self, *libraries):
         """
@@ -346,9 +397,13 @@ class EnvManager:
                 try:
                     imported_modules.append(__import__(lib_name))
                 except ImportError as e:
-                    self._log(f"Warning: Could not import '{lib_name}': {e}", level="warning")
+                    self._log(
+                        f"Warning: Could not import '{lib_name}': {e}", level="warning"
+                    )
                     imported_modules.append(None)  # Append None for failed imports
             else:
-                imported_modules.append(sys.modules[lib_name])  # Append the already loaded module
+                imported_modules.append(
+                    sys.modules[lib_name]
+                )  # Append the already loaded module
 
         return tuple(imported_modules)
