@@ -2,11 +2,11 @@ name: Create Release
 
 on:
   workflow_dispatch:
-    inputs:
-      target_branch:
-        description: 'Branch to create release from'
-        required: true
-        default: 'main'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
   create-release:
@@ -15,7 +15,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.target_branch }}
           
       - name: Get version from pyproject.toml
         id: get_version
@@ -41,5 +40,4 @@ jobs:
           body_path: CHANGELOG.md
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
