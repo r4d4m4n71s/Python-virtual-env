@@ -1,11 +1,8 @@
-name: Pre-commit Checks
+name: <1> Pre-commit Checks
 
 on:
-  pull_request:
-    branches: [ main ]
   push:
-    branches: [ main ]
-
+  pull_request:
 jobs:
   pre-commit:
     runs-on: ubuntu-latest

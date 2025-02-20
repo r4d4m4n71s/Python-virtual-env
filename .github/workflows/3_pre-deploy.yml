@@ -1,4 +1,4 @@
-name: 2) Pre-deployment Version Bump
+name: <3> Pre-deployment Version Bump
 
 on:
   workflow_dispatch:
