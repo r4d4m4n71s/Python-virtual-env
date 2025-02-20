@@ -2,14 +2,6 @@ name: Release Workflow
 
 on:
   workflow_dispatch:
-    inputs:
-      release_type:
-        description: 'Release Type'
-        required: true
-        type: choice
-        options:
-          - production
-          - beta
 
 jobs:
   build:
@@ -45,14 +37,14 @@ jobs:
         git config --local user.name "github-actions[bot]"
 
     - name: Version Management for Production
-      if: ${{ github.ref == 'refs/heads/main' && inputs.release_type == 'production' }}
+      if: ${{ github.ref == 'refs/heads/main' }}
       run: |
         bump2version patch --config-file .bumpversion.cfg
         git push
         git push --tags
 
     - name: Version Management for Beta
-      if: ${{ github.ref != 'refs/heads/main' && inputs.release_type == 'beta' }}
+      if: ${{ github.ref != 'refs/heads/main' }}
       run: |
         # For beta releases, we append beta suffix to version
         bump2version patch --config-file .bumpversion.cfg --new-version $(bump2version --dry-run patch --list | grep current_version | sed s,"^.*=",,).beta
@@ -70,14 +62,14 @@ jobs:
 
     - name: Move Artifacts to Appropriate Directory
       run: |
-        if [[ "${{ inputs.release_type }}" == "production" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
           mv dist/* distribution/release/
         else
           mv dist/* distribution/beta/
         fi
 
     - name: Upload Production Artifacts
-      if: ${{ inputs.release_type == 'production' && github.ref == 'refs/heads/main' }}
+      if: ${{ github.ref == 'refs/heads/main' }}
       uses: actions/upload-artifact@v3
       with:
         name: production-release
@@ -85,7 +77,7 @@ jobs:
         if-no-files-found: error
 
     - name: Upload Beta Artifacts
-      if: ${{ inputs.release_type == 'beta' }}
+      if: ${{ github.ref != 'refs/heads/main' }}
       uses: actions/upload-artifact@v3
       with:
         name: beta-release

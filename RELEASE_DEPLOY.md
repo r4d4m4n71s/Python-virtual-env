@@ -17,9 +17,9 @@ The release workflow handles building and versioning of the package.
 1. Go to GitHub Actions
 2. Select "Release Workflow"
 3. Click "Run workflow"
-4. Choose release type:
-   - `production`: For main branch releases
-   - `beta`: For development releases
+4. The release type is automatically determined by the branch:
+   - When triggered from `main` branch: Creates a production release
+   - When triggered from any other branch: Creates a beta release
 
 #### What the Release Workflow Does
 1. Sets up Python environment
