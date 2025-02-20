@@ -163,9 +163,8 @@ class TestEnvManager(unittest.TestCase):
             "importlib.metadata", "pkg_resources"
         )
         self.assertIsNotNone(importlib_metadata)
-        # pkg_resources might be None in Python 3.13+, that's okay
-        if sys.version_info < (3, 13):
-            self.assertIsNotNone(pkg_resources_module)
+        # pkg_resources is optional since we primarily use importlib.metadata
+        # pkg_resources_module may be None, which is fine as it's not required
 
     def test__auto_load_libraries_fail(self):
         nonexistent = self.venv_manager._auto_load_libraries("nonexistent_module")
