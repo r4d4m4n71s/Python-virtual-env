@@ -145,7 +145,7 @@ class EnvManager:
         return (
             f'"{activate_script}"'
             if sys.platform == "win32"
-            else f'source "{activate_script}"'
+            else f'. "{activate_script}"'
         )
 
     def run(self, command, *args, capture_output=True, env=None):
