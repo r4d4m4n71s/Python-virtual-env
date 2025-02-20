@@ -74,7 +74,7 @@ jobs:
 
       - name: Commit and push changes
         run: |
-          git add pyproject.toml
+          git add pyproject.toml .bumpversion.cfg
           git commit -m "Bump version to ${{ steps.bump.outputs.version }}"
           git push
 

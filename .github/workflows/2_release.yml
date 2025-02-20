@@ -51,7 +51,7 @@ jobs:
           tag_name: v${{ steps.get_version.outputs.version }}
           name: Release v${{ steps.get_version.outputs.version }}
           body_path: CHANGELOG.md
-          draft: false
+          draft: true
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
