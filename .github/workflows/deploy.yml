@@ -1,46 +1,134 @@
-name: 3) Deploy Package
+name: Deploy Package
 
 on:
   workflow_dispatch:
     inputs:
-      distribution_type:
-        description: 'Distribution type to deploy (release/beta)'
+      deploy_target:
+        description: 'Deploy Target'
         required: true
         type: choice
         options:
-          - release
-          - beta
+          - production-pypi
+          - test-pypi
 
 jobs:
-  deploy:
+  list-artifacts:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
     steps:
-      - uses: actions/checkout@v4
+    - name: Get available artifacts
+      id: set-matrix
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const response = await github.rest.actions.listArtifactsForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
+          const artifacts = response.data.artifacts
+            .filter(artifact =>
+              artifact.name === 'production-release' ||
+              artifact.name === 'beta-release'
+            )
+            .map(artifact => ({
+              name: artifact.name,
+              id: artifact.id,
+              created_at: artifact.created_at,
+              size: Math.round(artifact.size_in_bytes / 1024) + ' KB'
+            }));
 
-      - name: List available distributions
-        id: list_dist
-        run: |
-          echo "Available distributions in distribution/${{ github.event.inputs.distribution_type }}:"
-          ls -l distribution/${{ github.event.inputs.distribution_type }}
+          console.log('Available artifacts:');
+          artifacts.forEach(a => {
+            console.log(`${a.name} (${a.size}) - Created: ${a.created_at}`);
+          });
 
-      - name: Set PyPI repository URL
-        id: pypi_url
-        run: |
-          if [ "${{ github.event.inputs.distribution_type }}" = "release" ]; then
-            echo "url=https://upload.pypi.org/legacy/" >> $GITHUB_OUTPUT
-          else
-            echo "url=https://test.pypi.org/legacy/" >> $GITHUB_OUTPUT
-          fi
+          core.setOutput('matrix', JSON.stringify(artifacts));
 
-      - name: Deploy to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          pip install twine
-          twine upload --repository-url ${{ steps.pypi_url.outputs.url }} distribution/${{ github.event.inputs.distribution_type }}/*
+  deploy:
+    needs: list-artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        artifact: ${{fromJson(needs.list-artifacts.outputs.matrix)}}
+
+    steps:
+    - name: Download artifact
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const download = await github.rest.actions.downloadArtifact({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            artifact_id: ${{ matrix.artifact.id }},
+            archive_format: 'zip',
+          });
+
+          const fs = require('fs');
+          fs.writeFileSync('${{github.workspace}}/artifact.zip', Buffer.from(download.data));
+
+    - name: Extract artifact
+      run: |
+        unzip artifact.zip -d dist/
+        rm artifact.zip
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Load cached dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-deploy-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-deploy-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install twine
+
+    - name: Validate deployment combination
+      run: |
+        if [[ "${{ inputs.deploy_target }}" == "production-pypi" && "${{ matrix.artifact.name }}" != "production-release" ]]; then
+          echo "❌ Error: Cannot deploy beta release to production PyPI"
+          exit 1
+        fi
+
+    - name: Deploy to PyPI
+      if: inputs.deploy_target == 'production-pypi'
+      env:
+        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        TWINE_REPOSITORY: pypi
+      run: |
+        echo "📦 Deploying ${{ matrix.artifact.name }} to PyPI..."
+        twine upload dist/*
+
+    - name: Deploy to TestPyPI
+      if: inputs.deploy_target == 'test-pypi'
+      env:
+        TWINE_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_PASSWORD }}
+        TWINE_REPOSITORY: testpypi
+        TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
+      run: |
+        echo "📦 Deploying ${{ matrix.artifact.name }} to TestPyPI..."
+        twine upload dist/*
+
+    - name: Deployment Status
+      run: |
+        echo "✅ Deployment Summary:"
+        echo "- Artifact: ${{ matrix.artifact.name }} (${{ matrix.artifact.size }})"
+        echo "- Created: ${{ matrix.artifact.created_at }}"
+        if [ "${{ inputs.deploy_target }}" = "production-pypi" ]; then
+          echo "- Target: PyPI"
+          echo "- View at: https://pypi.org/project/venv-py/"
+        else
+          echo "- Target: TestPyPI"
+          echo "- View at: https://test.pypi.org/project/venv-py/"
+        fi

@@ -1,43 +1,93 @@
-name: 1) Create Release
+name: Release Workflow
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+    inputs:
+      release_type:
+        description: 'Release Type'
+        required: true
+        type: choice
+        options:
+          - production
+          - beta
 
 jobs:
-  create-release:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Required for bump2version to work properly
 
-      - name: Get version from pyproject.toml
-        id: get_version
-        run: |
-          VERSION=$(grep "^version =" pyproject.toml | cut -d'"' -f2)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
 
-      - name: Generate changelog
-        id: changelog
-        run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$PREVIOUS_TAG" ]; then
-            git log --pretty=format:"* %s (%h)" > CHANGELOG.md
-          else
-            git log ${PREVIOUS_TAG}..HEAD --pretty=format:"* %s (%h)" > CHANGELOG.md
-          fi
+    - name: Load cached dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.get_version.outputs.version }}
-          name: Release v${{ steps.get_version.outputs.version }}
-          body_path: CHANGELOG.md
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build bump2version
+        pip install -e .
+
+    - name: Configure Git
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+
+    - name: Version Management for Production
+      if: ${{ github.ref == 'refs/heads/main' && inputs.release_type == 'production' }}
+      run: |
+        bump2version patch --config-file .bumpversion.cfg
+        git push
+        git push --tags
+
+    - name: Version Management for Beta
+      if: ${{ github.ref != 'refs/heads/main' && inputs.release_type == 'beta' }}
+      run: |
+        # For beta releases, we append beta suffix to version
+        bump2version patch --config-file .bumpversion.cfg --new-version $(bump2version --dry-run patch --list | grep current_version | sed s,"^.*=",,).beta
+        git push
+        git push --tags
+
+    - name: Build Package
+      run: |
+        python -m build
+
+    - name: Create Distribution Directory
+      run: |
+        mkdir -p distribution/release
+        mkdir -p distribution/beta
+
+    - name: Move Artifacts to Appropriate Directory
+      run: |
+        if [[ "${{ inputs.release_type }}" == "production" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+          mv dist/* distribution/release/
+        else
+          mv dist/* distribution/beta/
+        fi
+
+    - name: Upload Production Artifacts
+      if: ${{ inputs.release_type == 'production' && github.ref == 'refs/heads/main' }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: production-release
+        path: distribution/release
+        if-no-files-found: error
+
+    - name: Upload Beta Artifacts
+      if: ${{ inputs.release_type == 'beta' }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: beta-release
+        path: distribution/beta
+        if-no-files-found: error
